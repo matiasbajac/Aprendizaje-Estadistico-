@@ -324,8 +324,61 @@ d) Le agregamos un grado mas manteniendo la penalizacion, por lo que $\hat{g} = 
 e) $\lambda = 0, m=3$ no hay penalizacion, por lo que $\hat{g}$ puede ser muy flexible y generar sobreajuste. Se debe estimar  por minimos cuadrados.
 
 
+3) Suppose we fit a curve with basis function $b_1(X) = X, b_2(X)=(X-1)^2I(X\geq 1)$. Note that $I(X \geq 1)$ equals 1 for $X \geq 1$ and 0 otherwise, We fit the linear regression model
+
+$$ Y = \beta_0 +\beta_1b_1(X) +\beta_1b2(X) + \epsilon$$
+
+and obtain the coefficient estimates $\hat{\beta_0}=1, \hat{\beta_1} = 1, \hat{\beta_2} = -2$. Sketch the estimated curve between X = -2, and X =2. Note the intercepets  slopes and other relevant information 
 
 
+Sustituyendo las estimaciones de la regresion lineal y los $b_i$  en la ecuacion Y , obtenemos la estimacion de Y: 
+en caso de queq X >= 1 
+$\hat{Y} = 1 +  X + 2(X-1)^2$
+
+sino 
+
+$\hat{Y} = 1 +  X$
+
+Es claro en el grafico que cuando X =0 , el intercepto vale 1. 
+Tambien se puede visualizar que hay un cambio en la pendiente cuando X es mayor a 1, siendo que se pierde la linealidad, ( hasta X =  1 es lineal).
+
+
+
+
+```{r}
+
+  X = seq(-2,2,0.01)
+ fhat  = function(X){
+  
+  Y = rep(0,length(X))
+  
+   for(j in 1:length(X)){
+     
+     if (X[j] > 1 | X[j]==1){
+       
+       Y[j] = 1 + X[j] -2*(X[j]-1)^2
+     }
+       
+       else{
+         Y[j] = 1 + X[j]
+         
+       }
+     }
+      return(Y) 
+   }
+  
+ 
+  
+
+fhat = fhat(X)
+
+df = data.frame(X =X , Y =fhat )
+library(ggplot2)
+
+ ggplot(df,aes(x= X, y= Y )) + geom_line()  + geom_vline(xintercept = 0)
+
+  
+```
 
 
 
@@ -834,5 +887,7 @@ draw(fit_gam,residuals = T)
 
 
 
-No parece haber linealdad entre la variable explicativa Expend y la variable dependiente outstate. 
+La unica relacion lineal aparente es la de la variable dependiente outstate con la predictora room board.
+
+
 
