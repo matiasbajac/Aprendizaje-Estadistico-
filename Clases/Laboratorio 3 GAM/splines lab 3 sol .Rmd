@@ -1,0 +1,381 @@
+---
+title: "Laboratorio 3"
+author: "Matias Bajac"
+date: '2024-10-02'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidymodels)
+library(ISLR)
+
+Wage <- as_tibble(Wage)
+glimpse(Wage)
+```
+## entrenar distintas anternativas de spines o GAM
+```{r}
+set.seed(123)
+
+data_split <- rsample::initial_split(Wage, prop = 3/4)
+
+# Create data frames for the two sets:
+train_data <-rsample::training(data_split)
+test_data  <- rsample::testing(data_split)
+```
+
+recipe()
+si queremos ver el pol con coef original uso options = list(raw = TRUE)
+No QUEREMOS TENER MULTICOLINEALIDAD
+
+
+
+
+```{r}
+rec_poly <- recipes::recipe(wage ~ age, data = train_data) %>%
+            recipes::step_poly(age, degree = 4, options = list(raw = TRUE))
+## polinomios ortogonalizados, comb lineal de las variables 
+```
+Ya hicimos el procesiamento, seugundo paso agregamos la especificacion del modelo, ajuste de pol de grado 4 usando un ajuste lineal linear_reg(), set_mode("regression") en este caso es redundandte
+
+## Ejercicio 2  polinomio de orden 4 
+
+
+Volviendo a ajustar con tidymodels: 
+
+1. Cambiar el paso de la receta donde se define el polinomio sacando el arguemnto options
+```{r}
+
+
+
+lm_spec <- parsnip::linear_reg() %>%
+           parsnip::set_mode("regression") %>% 
+           parsnip::set_engine("lm")
+
+
+
+```
+
+Defino esl wokflows()
+agrego el modelo con el modelo que especifique
+hasta aca no hicimos ajsuste , para eso hacemos fit()
+```{r}
+poly_wf <- workflows::workflow() %>%
+   workflows::add_model(lm_spec) %>%
+  workflows::add_recipe(rec_poly)
+```
+
+
+```{r}
+poly_fit <- parsnip:: fit(poly_wf, data = train_data)
+poly_fit
+```
+
+```{r}
+tidy(poly_fit)
+```
+
+
+```{r}
+age_range <- tibble(age = seq(min(Wage$age), max(Wage$age)))
+
+regression_lines <- bind_cols(
+  augment(poly_fit, new_data = age_range),
+  predict(poly_fit, new_data = age_range, type = "conf_int")
+)
+regression_lines
+```
+```{r}
+Wage %>%
+  ggplot(aes(age, wage)) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(y = .pred), color = "darkgreen",
+            data = regression_lines) +
+  geom_line(aes(y = .pred_lower), data = regression_lines,
+            linetype = "dashed", color = "blue") +
+  geom_line(aes(y = .pred_upper), data = regression_lines,
+            linetype = "dashed", color = "blue")
+```
+
+
+1) Que pasa si ajusto directamente un modelo lineal con el polinomio de grado 4  usando lm, usa poly() para definir el polinomio adentro de lm?
+
+```{r}
+
+lm(wage~ poly(age ,raw=T,degree=4), data =train_data)
+```
+2. Compara los resultados estimados con los obtenidos haciendolo directamente con lm sin tidymodels 
+
+
+4)
+```{r}
+lm(wage~I(age) + I(age^2) + I(age^3) + I(age^4),data = train_data)
+
+#lmwage ~ cbind(age,age^2age^3,age^4), data = train_data)
+```
+La esstimacion da distinto, ortogonalizacion 
+```{r}
+rec_poly <- recipes::recipe(wage ~ age, data = train_data) %>%
+            recipes::step_poly(age, degree = 4)
+
+lm_spec <- parsnip::linear_reg() %>%
+           parsnip::set_mode("regression") %>% 
+           parsnip::set_engine("lm")
+
+poly_wf <- workflows::workflow() %>%
+   workflows::add_model(lm_spec) %>%
+  workflows::add_recipe(rec_poly)
+
+poly_fit <- parsnip:: fit(poly_wf, data = train_data)
+poly_fit
+
+age_range <- tibble(age = seq(min(Wage$age), max(Wage$age)))
+
+regression_lines <- bind_cols(
+  augment(poly_fit, new_data = age_range),
+  predict(poly_fit, new_data = age_range, type = "conf_int")
+)
+regression_lines
+
+
+Wage %>%
+  ggplot(aes(age, wage)) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(y = .pred), color = "darkgreen",
+            data = regression_lines) +
+  geom_line(aes(y = .pred_lower), data = regression_lines,
+            linetype = "dashed", color = "blue") +
+  geom_line(aes(y = .pred_upper), data = regression_lines,
+            linetype = "dashed", color = "blue")
+```
+En el caso de los spones no interesa los coeficientes sino la forma.
+
+Si en step_poly usamos el valor del argumento options por defecto raw=FALSE implica que no se produce un polinomio regular sino ortogonalizado. Retorna variables que son bases de polinomios ortogonales. 
+
+Lo que significa que cada columna en la matriz es una combinacion lineal de las variables $age, age^2, age^3, age^4$
+
+Esto modifica las estimaciones pero no necesariamente el ajuste
+## Ejercicio 3: Splines cubicas 
+
+1) Vamos a usar el mismo training y test definido anteriormente. 
+
+1) En el preprocesamiento de los datos con recipe() defini un nuevo objeto rec_spline usando step_bs() con tres knots en 25 40 y 60.
+
+Para ajustar splines vamos a usar step_bs() del paquete recipes que crea columnas que son funciones de base. Argumentos que definen la no linealidad tales como knots, grados de libertad son definidos en la función bs(). Por defecto ajusta una splina cúbica
+## argumento adicional de bs!! el knot 
+
+```{r}
+rec_spline = recipes::recipe(wage ~ age, data = train_data) %>%  
+  recipes :: step_bs(age, options = list(knots = 25, 50,60) )
+
+
+```
+
+2) Usando la misma especificacion del modelo lm_spec crea el nueo workflow y nombralo splines_wf
+
+```{r}
+splines_wf<- workflows::workflow() %>%
+   workflows::add_model(lm_spec) %>%
+  workflows::add_recipe(rec_spline)
+```
+
+3) Ajusta el modelo
+
+```{r}
+splines_fit <- parsnip:: fit(splines_wf, data = train_data)
+```
+
+4) Obtene la prediccion apra el conjunto de los test (test_data)
+
+```{r}
+predict(splines_fit,new_data = test_data)
+```
+```{r}
+age_range - tibble(age = seq(min(Wage$age), max(Wage$age)))
+
+regression_lines1 <- bind_cols(
+  augment(splines_fit, new_data = age_range),
+  predict(splines_fit, new_data = age_range, type = "conf_int")
+)
+
+Wage %>%
+  ggplot(aes(age, wage)) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(y = .pred), color = "darkgreen",
+            data = regression_lines) +
+  geom_line(aes(y = .pred_lower), data = regression_lines,
+            linetype = "dashed", color = "blue") +
+  geom_line(aes(y = .pred_upper), data = regression_lines,
+            linetype = "dashed", color = "blue")
+
+
+
+```
+
+
+## Tu turno 4: siple natural 
+
+-Realiza el ajuste de una spline natural usando step_ns() con los mismos knots que el anterior y agrega el resultado al grafico anterior con ambos ajustes. 
+
+Ajustamos una splina de orden 4 
+doonde pone los knots 
+Si no hacemos nada hace un polinomio en vez de spline 
+Splina natural las puntas son rectas 
+
+
+
+
+```{r}
+spline_nat = recipes::recipe(wage ~ age, data = train_data) %>%  
+  recipes :: step_ns(age, options =
+                       list(knots = 25, 50,60) )
+
+s#pline_nat = recipes::recipe(wage ~ age, data = train_data) %>%  
+  #recipes :: step_ns(age, degree=3)
+
+
+
+# donde pone los knots con degree 
+
+
+
+nat_wf <- workflows::workflow() %>%
+   workflows::add_model(lm_spec) %>%
+  workflows::add_recipe(spline_nat)
+
+nat_fit <- parsnip:: fit(nat_wf, data = train_data)
+
+
+age_range <- tibble(age = seq(min(Wage$age), max(Wage$age)))
+
+regression_lines_ns <- bind_cols(
+  augment(nat_fit, new_data = age_range),
+  predict(nat_fit, new_data = age_range, type = "conf_int")
+)
+regression_lines
+
+
+## agregar la prediccion del otro 
+  Wage %>%
+  ggplot(aes(age, wage)) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(y = .pred), color = "blue",
+            data = regression_lines1) +
+  geom_line(aes(y = .pred_lower), data = regression_lines1,
+            linetype = "dashed", color = "blue") +
+  geom_line(aes(y = .pred_upper), data = regression_lines1,
+            linetype = "dashed", color = "blue") +
+    geom_line(aes(y= .pred),  color ="red",data = regression_lines_ns, linetype ="dashed") +
+    geom_line(aes(y = .pred_lower), data = regression_lines_ns,
+              linetype = "dashed", color = "red") +
+    geom_line(aes(y = .pred_upper), color = "red", data = regression_lines_ns, linetype = "dashed") +
+    geom_vline(xintercept = c(25,40,60), lty =2)
+  
+
+
+```
+
+tu turno 5 , puntos 1 ,2 y 3
+
+## Ejercicio 5: GAM
+
+1. Usando year age y education ajusta un GAM con todas splines naturales definiendo las mismas con step_ns() en la receta.
+
+2. Para year usa una spline natural de grado 4, y para age de orden 5.
+
+3. Obtene los coeficientes estimados usando lm comoengine como anteriormente
+
+
+
+
+```{r}
+library(ISLR2)
+library(gam)
+gam1 = lm(wage ~ ns(year,4) + ns(age,5) + education,data = Wage)
+summary(gam1)
+```
+
+
+
+```{r}
+ natural_spl = recipes::recipe(wage ~ age + education + year, data = Wage) %>% 
+  recipes::step_ns(age,deg_free =5) %>% 
+  recipes::step_ns(year, deg_free  = 4)
+
+#spline_nat = recipes::recipe(wage ~ age + education + year , data = train_data) %>%  
+  #recipes :: step_ns(c(age,year), list = degree(5,4)
+
+lm_spec <- parsnip::linear_reg() %>%
+           parsnip::set_mode("regression") %>% 
+           parsnip::set_engine("lm")
+
+nat_wf <- workflows::workflow() %>%
+   workflows::add_model(lm_spec) %>%
+  workflows::add_recipe( natural_spl) %>%  generics::fit( data = Wage) 
+
+
+nat_fit <- parsnip:: fit(nat_wf, data = train_data)  
+tidy(nat_fit)
+
+
+
+
+
+
+
+```
+
+
+
+
+4)Alternativamente ajustar un GAM con splies suavizadas, en este caso como no se pueden expresar como funciones de base vamos a usar la engine mgcv
+```{r}
+rec_gam_ns <- recipes::recipe( wage ~ year + age + education, data = Wage) |>
+  recipes::step_ns(year, deg_free = 4)  |>
+recipes::step_ns( age, deg_free = 5)
+ gam_wf_ns <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_gam_ns)
+gam_fit_ns <- fit(gam_wf_ns, data = train_data)
+fit_gam <- extract_fit_engine(gam_fit_ns)
+summary(fit_gam)
+
+```
+
+
+
+`
+
+```{r}
+broom::augment(gam_fit_ns,
+               new_data = test_data)
+```
+
+```{r}
+broom::glance(gam_fit_ns)
+```
+
+```{r}
+library(gratia)
+
+ rec_gam2 <- recipes::recipe( wage ~ year + age + education, data = train_data)
+gam_spec <-gen_additive_mod() %>%
+  set_engine("mgcv") %>%
+  set_mode("regression")
+   gam_wf <- workflow() %>%
+  add_recipe( rec_gam2) |>
+  add_model(gam_spec,
+            formula=  wage ~ s(year,k=4)  + s(age,k=5) + education)
+gam_fit <- fit( gam_wf , data = train_data)
+fit_gam <- extract_fit_engine(gam_fit)
+draw(fit_gam, residuals=TRUE)
+
+gratia::appraise(fit_gam)
+
+
+```
+

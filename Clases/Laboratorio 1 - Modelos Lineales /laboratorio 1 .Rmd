@@ -1,0 +1,538 @@
+---
+title: "Clase Tidymodels"
+author: "Matias Bajac"
+date: '2024-09-01'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)
+library(here)
+library(tidyverse)
+library(GGally)
+library()
+
+
+```
+
+## parte 2 Leer los dastos y simplificar 
+```{r}
+nrc = read_csv(here("Clases","Laboratorio 1", "nrc.csv" ))
+
+
+
+# --- Simplificamos los nombres  y seleccionamos algunas variables
+nrc <- nrc %>% 
+  select(rank = R.Rankings.5th.Percentile,
+         research = Research.Activity.5th.Percentile,
+         student = Student.Support.Outcomes.5th.Percentile,
+         diversity = Diversity.5th.Percentile)
+
+
+```
+
+## Exploracion de datos 
+
+Hacer un grafico de la respuesta observada contra los predictores
+
+Que aprendemos de la relacion entre estas variables?
+
+
+```{r}
+# rank (respuesta (y)) vs research(predictora)
+
+a1 = ggplot(nrc,aes(x=research,y=rank)) +
+  geom_point()  +
+  geom_smooth(se=FALSE) 
+
+## rank vs student 
+
+a2 = ggplot(nrc,aes(x=student,y=rank)) +
+  geom_point() +
+  geom_smooth(se = FALSE)
+
+a3 = ggplot(nrc, aes(x=diversity,y=rank)) + geom_point() +
+  geom_smooth(se=FALSE)
+
+## todos en una fila
+
+
+```
+
+La relacion entre rank y research es fuerte y positiva 
+
+Poca relacion con los otros predictores
+
+
+## Podemos usar un scatterplot matrix
+
+```{r}
+ggpairs(nrc,columns=c(2,3,4))
+```
+
+No hay relacion entre los pares de predictores, no hay atipicos ni agrupamiento. 
+
+La distribucion de cada predictor es un poco asimetrica a la derecha 
+
+
+
+## Parte 4 Especificar el modelo con parsnip 
+
+Paso 1: especificar el tipo de modelo 
+
+*Especificar el modelo (ej: modelos para regresion lineal)
+
+*Usualmente basado en la estructura matematica
+
+Paso 2: Especificar el motor (engine)
+
+*Especificar el paquete o sistea para ajustar el modelo.
+
+* La mayoria de las veces refleja el paquete 
+
+Paso 3 Declarar el modo de ser necesario 
+
+* Fijar la clase de problem, usualmente influye como se recopia la respuesta ej: 
+si la respuesta es numerica: set_mode("regression), si la respuesta es categorica set_mode("classification")
+
+* Este paso no se necesita si mode ya se definio en el paso 1
+
+```{r}
+
+lm_mod <-
+  parsnip::linear_reg() %>% # Paso 1:  Especificamos el tipo de modelo
+  parsnip::set_engine("lm") # Paso 2: Especificamos el motor (engine)
+lm_mod
+
+
+```
+
+set_mode() en este caso  no es necesario porque el tipo de modelo fue especificado en el paso 1
+
+
+## Posibles motores para regresion lineal 
+
+Existen distintas formas de especificar un modelo de regresion lineal seleccionando distintos motores 
+
+
+Podemos ver los motores disponibles para un posible modelo que esta disponible por defecto 
+
+```{r}
+show_engines("linear_reg")
+```
+
+
+## Parte 5: Ajustamos el modelo 
+
+Una vez que los detalles del modelo fueron especificados, la estimacion se puede hacer con la funcion fit() (mediante expresion de tipo formula y los datos)
+
+La formula es escrita como y ~ x donde y es el nombre de la respuesta y x es el nombre de la predictora
+
+```{r}
+## Ajusto  el  modelo 
+
+lm_fit = lm_mod %>%  # modelo de parnsip 
+  parsnip::fit(rank ~ research + student + diversity, ## formula
+       
+                       data = nrc) # data frame
+
+## Alternativamente para ajustar el modelo se puede usar fit_t (especifico predictoras y respuesta)
+
+lm_xy_fit <-
+  lm_mod %>%
+  fit_xy(
+    x = nrc %>% select(research, student, diversity),
+    y = nrc %>% select(rank)
+  )
+
+
+lm_fit
+
+
+
+```
+
+
+
+El resultado de este ajuste es un **objeto** modelo de **parsnip**. Estos objetos contienen el ajuste del modelo y alguna informacion particular de **parsnip**. Se puede acceder al resumen del ajuste con: 
+
+```{r}
+lm_fit$fit %>%
+summary()
+```
+
+## Ajuste del modelo y vemos resultados
+
+```{r}
+# alternativamente
+lm_fit %>% 
+  extract_fit_engine() %>%
+summary()
+```
+
+## Parte 6: Explicar la relacioon entre la predictoras y la respuesta
+
+El reporte de los coeficientes estmiados.
+
+Se puede usar el paquete **broom** para extraer la info clave del objeto modelo en formato ordenado. 
+
+La funvcion **tidy()** retorna los parametros estimados de un objeto **lm**
+
+```{r}
+## coeficientes estimados en formato ordenado 
+
+broom::tidy(lm_fit)
+
+lm_fit %>%  tidy()
+
+
+```
+
+Explicar la relacion entre las predictoras y la respuesta. Tiene sentido esta interpretacion? a amyores valores en research mayor es el rank 
+
+
+Coeficientes para **research** 
+
+Manteniendo todas las otras variables ctes (ceterius paribus), cuando **resertch** aumenta en una unidad , **rank** auenta en 0.5645 (peor) en promedio
+
+Deberia teener mas sentido que mas research se asocie a un mejor rank (mas chico) 
+
+Es porque rank se basa en otras variables
+ 
+ Graficar esas variables con rank deberian dar asoc negativas 
+ 
+## Parte 7: Whisker plot de los coeficientes
+
+Es comun que uno vea los resultados de un regresion en tablas aunque hay muchas recomendaciones sobre visualizar los resultados y su efectividad respecto a presentarlos en tablas
+
+Una forma de repreentar los resultados de regresion es hacer un grafico de punto y bigote (dot and whisker plot)
+
+El paquete d**dotwhisker** permite hacer de formato sencilla estas viz para presentar y comparar resultados de modelos de regresion 
+
+Se puede hacer para graficar los coeficientes estimados u otras cantidades de interes (ej prob predichas) con un solo modelo o para diferentes modelos
+
+Las estimiaciones son presentadas con puntos y los intervalos de confianza como bigotes
+
+```{r}
+# Coeficientes estimados en formato ordenado
+  lm_fit %>%
+  dotwhisker::dwplot()
+```
+
+
+## Grafico con dwplot() personalizado
+
+Cambiamos el color e incluimos una linea de referencia vertical en el cero:
+
+```{r}
+  # Dot-and-whisker plot
+broom::tidy(lm_fit) %>%
+  dotwhisker::dwplot(dot_args = list(size = 2, color = "black"),
+                     whisker_args = list(color = "black"),
+                     vline = geom_vline(xintercept = 0,
+                                        colour = "grey50"))
+```
+## Que aprendimos del grafico?
+
+**student** y **diversity** se solapan con el 0, sugiere que estos predictores no son significtivqmente distintos de cero 
+
+El coeficiente de **research** es significativamente distinto de 0 ( t grande) es la unica importante en el modelo.
+
+Relacion positiva entre **research** y **rank**
+
+## Otras funciones de broom
+
+```{r}
+## Para extraer residuos y valores ajustados
+## para modelos de parnsip debemos dar datos para hacer predicciones
+
+broom::augment(lm_fit,
+               new_data = nrc)
+
+
+
+```
+
+El ajuste es bueno? 
+
+```{r}
+## summary mas potente
+broom::glance(lm_fit)
+```
+El modelo explica el 45% de la variabilidad de rank
+
+
+## Parte 9: Diagnostico 
+  Explorar el ajuste visualmente 
+  Graficar los valores predichos vs los observados, residuos contra ajustados y predichos contra los predictores]
+  
+  Residuos vs ajustado: se usa para identificar patrones que evidencien no linealidad de los datos
+  
+```{r}
+#Extraer los residuos y ajustados
+nrc_all <- broom::augment(lm_fit, new_data = nrc)
+
+# Ajustado  vs observado
+p1 <-
+  ggplot(nrc_all, aes(x = .pred, y = rank)) +
+  geom_point() +
+  labs(title = "Observado vs predicho") +
+  theme(aspect.ratio=1)
+# residuos vs. ajustado
+p2 <-
+  ggplot(nrc_all, aes(x = .pred, y = .resid)) +
+  geom_point() +
+  labs(title = "residuos vs ajustado") +
+  theme(aspect.ratio=1)
+require(patchwork)
+p1 + p2
+```
+  
+  Observado vs predicho muestra ajuste razonable
+  
+  Hay dos atipios, se revelan mas con el plot de los residuos
+  
+  Estos son programas con rankings pobres pero que predicen mejore de lo que son
+  
+  ## Atipicos
+  
+```{r}
+# ---saco outliers
+nrc_all %>% filter(.pred < 20 & rank > 40)
+
+# Observed (actual) vs predicted (fitted)
+# Research
+p3 <-
+  ggplot(nrc_all, aes(x = research, y = .pred)) +
+  geom_point() +theme(aspect.ratio=1)
+# Student outcomes
+p4 <-
+  ggplot(nrc_all, aes(x = student, y = .pred)) +
+  geom_point() +theme(aspect.ratio=1)
+# Diversity
+p5 <-
+  ggplot(nrc_all, aes(x = diversity, y = .pred)) +
+  geom_point() +theme(aspect.ratio=1)
+p3 + p4 + p5
+
+```
+Hay una rel fuerte entre research y los valores predicos, que muestras que principalmente que el modelo usa research como predictora
+
+##Paso 10: Generamos una data para predecir 
+```{r}
+# --- Prediciendo nuevos datos
+# Generar un nuevo conjunto de datos usamos expand_grid() )
+# Mirar https://tidyr.tidyverse.org/reference/expand_grid.html
+new_points <- expand_grid(research = c(10, 40, 70),
+                          student = c(10, 40, 70),
+                          diversity = c(10, 40, 70))
+
+
+new_points
+```
+
+
+```{r}
+# Predecimos nuevos conjuntos de datos unsando el modelo corriente
+
+mean_pred <- predict(lm_fit, new_data = new_points)
+
+# Derivamos los intervalos de confianza
+
+conf_int_pred <- predict(lm_fit,
+                         new_data = new_points,
+                         type = "conf_int")
+
+# Extraemos los residuos y los valores ajustados,
+#agregamos  argument en un data frame
+new_points <- broom::augment(lm_fit, new_data = new_points)
+
+
+
+```
+
+
+```{r}
+#  Grafico los datos predichos y los observados, coloreo los nuevos puntos
+ggplot() +
+  geom_point(data = nrc_all, aes(x = research, y = .pred)) +
+  geom_point(data = new_points, aes(x = research, y = .pred),
+             colour = "red") + theme(aspect.ratio = 1)
+```
+
+```{r}
+a6 <- ggplot(nrc, aes(x = research, y = rank, color = diversity)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$diversity)) +
+  theme(aspect.ratio = 1, legend.position = 'bottom')
+
+a7 <- ggplot(nrc, aes(x = research, y = rank, color = student)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$student)) +
+  theme(aspect.ratio = 1,legend.position = 'bottom')
+
+
+a8 <- ggplot(nrc, aes(x = student, y = rank, color = diversity)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$diversity)) +
+  theme(aspect.ratio = 1, legend.position = 'bottom')
+
+a6 + a7 + a8
+```
+
+
+
+
+```{r}
+lm_fit_int <-
+  lm_mod |> # modelo de parnisp
+  parsnip::fit(rank ~ research*diversity , # Formula
+               data = nrc) # Data frame
+lm_fit_int |>
+  tidy()
+```
+
+```{r}
+# Subdivido la muestra en entrenamiento y testeo usando el paquete rsample
+set.seed(22)
+train_test_split <- rsample::initial_split(nrc, prop = 2/3)
+
+nrc_train <- rsample::training(train_test_split)
+nrc_test <- rsample::testing(train_test_split)
+```
+
+
+
+
+
+```{r}
+#Ajustamos el modelo con los datos de entrenamiento
+nrc_lm_fit <-
+  lm_mod |>
+  fit(rank ~ ., data = nrc_train)
+
+# resumimos el modelo
+tidy(nrc_lm_fit)
+```
+
+
+
+
+```{r}
+# broom::augment() is an easy way to get predicted
+# values and residuals
+nrc_lm_train_pred <- augment(nrc_lm_fit, nrc_train)
+nrc_lm_test_pred <- augment(nrc_lm_fit, nrc_test)
+metrics(nrc_lm_test_pred, truth = rank,
+        estimate = .pred)
+```
+
+
+
+```{r}
+# Plot fitted and residuals of training data
+p_f <- ggplot(nrc_lm_train_pred) +
+  geom_point(aes(x = .pred, y = rank))
+p_e <- ggplot(nrc_lm_train_pred) +
+  geom_point(aes(x = .pred, y = .resid))
+p_h <- ggplot(nrc_lm_train_pred, aes(x = .resid)) +
+  geom_histogram(binwidth=2.5, colour="white") +
+  geom_density(aes(y=..count..), bw = 2, colour="orange")
+p_q <- ggplot(nrc_lm_train_pred, aes(sample = .resid)) +
+  stat_qq() +
+  stat_qq_line() +
+  xlab("theoretical") + ylab("sample")
+p_q + p_e + p_h + p_f
+```
+
+
+
+```{r}
+ # Grafico el modelo ajustado contra cada predictor
+p1 <- ggplot(nrc_lm_train_pred) +
+  geom_point(aes(x = research, y = rank)) +
+  geom_point(aes(x = research, y = .pred),
+             colour="blue") +theme(aspect.ratio = 1)
+p2 <- ggplot(nrc_lm_train_pred) +
+  geom_point(aes(x = student, y = rank)) +
+  geom_point(aes(x = student, y = .pred),
+             colour="blue") +theme(aspect.ratio = 1)
+p3 <- ggplot(nrc_lm_train_pred) +
+  geom_point(aes(x = diversity, y = rank)) +
+  geom_point(aes(x = diversity, y = .pred),
+             colour="blue") +theme(aspect.ratio = 1)
+p1 + p2 + p3
+```
+
+
+**Hacer un grafico de los valores  predichos y los valores observados  y los nuevos datos colorealos en rojo 
+```{r}
+#  Grafico los datos predichos y los observados, coloreo los nuevos puntos
+ggplot() +
+  geom_point(data = nrc_all, aes(x = research, y = .pred)) +
+  geom_point(data = new_points, aes(x = research, y = .pred),
+             colour = "red") + theme(aspect.ratio = 1)
+```
+  
+  
+
+## 2
+**Explotar graficamente si hay alguna relacion entre las variables** 
+
+```{r}
+a6 <- ggplot(nrc, aes(x = research, y = rank, color = diversity)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$diversity)) +
+  theme(aspect.ratio = 1, legend.position = 'bottom')
+
+a7 <- ggplot(nrc, aes(x = research, y = rank, color = student)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$student)) +
+  theme(aspect.ratio = 1,legend.position = 'bottom')
+
+
+a8 <- ggplot(nrc, aes(x = student, y = rank, color = diversity)) +
+  geom_point(size = 3) +
+ scale_color_gradient2(midpoint = median(nrc$diversity)) +
+  theme(aspect.ratio = 1, legend.position = 'bottom')
+
+a6 + a7 + a8
+```
+
+
+
+## 3
+Incluir la interaccion en el modelo de diversidad y research 
+
+
+
+```{r}
+nrc_lm_fit <-
+  lm_mod |> # modelo de parnisp
+  parsnip::fit(rank ~ research*diversity , # Formula
+               data = nrc) # Data frame
+lm_fit_int |>
+  tidy()
+```
+
+## interacccion : el efecto de una variable depende de la otra 
+
+
+
+
+## forma mas conveniente de sacar el conkjunto de datos
+## entrenamiento y testeo estimaciones y predicciones 
+```
+
+## no es bueno en ternimos de la variab explicada 
+## obitene las predicciones y los residuos augment 
+
+
+
+## ell modelo captura la estr de  los datos 

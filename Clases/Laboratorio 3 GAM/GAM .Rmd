@@ -1,0 +1,129 @@
+---
+title: "GAM"
+author: "Matias Bajac"
+date: '2024-09-30'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)
+install.pa
+```
+
+```{r}
+library(ISLR2)
+
+gratia::draw(hits_gam, residuals=TRUE)
+## toma un objeto del mod ajustado
+
+hits_gam <-
+  mgcv::gam(logSalary ~
+s(logCHits) +
+s(Errors) +
+s(Assists), data = hits)
+```
+
+```{r}
+
+library(tidymodels)
+
+
+
+Wage <- as_tibble(Wage)
+glimpse(Wage)
+```
+
+## Partimos los datos 
+```{r}
+set.seed(123)
+
+data_split <- initial_split(Wage, prop = 3/4)
+
+# Create data frames for the two sets:
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+```
+
+```{r}
+rec_poly <- recipe(wage ~ age, data = train_data) %>%
+  step_poly(age, degree = 4, options = list(raw = TRUE))
+
+## con las recetas usamos pred para An de datos, espina polinomial,
+## def el conju de datos
+## step_pol me genero mas variables 
+## en este caso un pol de grado 4.
+
+
+```
+
+```{r}
+lm_spec <- linear_reg() %>%
+  set_mode("regression") %>%
+  set_engine("lm")
+
+poly_wf <- workflow() %>%
+  add_model(lm_spec) %>%
+  add_recipe(rec_poly)
+
+```
+
+
+
+```{r}
+poly_fit <- fit(poly_wf, data = train_data)
+tidy(poly_fit)
+```
+
+los pones a competir y busscar los mejores hipermarametros
+
+## Predicciones
+```{r}
+age_range <- tibble(age = seq(min(Wage$age), max(Wage$age)))
+
+regression_lines <- bind_cols(
+  augment(poly_fit, new_data = age_range),
+  predict(poly_fit, new_data = age_range, type = "conf_int")
+)
+regression_lines
+```
+
+Estamos en un mundo polinomial con una variable
+
+```{r}
+Wage %>%
+  ggplot(aes(age, wage)) +
+  geom_point(alpha = 0.2) +
+  geom_line(aes(y = .pred), color = "darkgreen",
+            data = regression_lines) +
+  geom_line(aes(y = .pred_lower), data = regression_lines,
+            linetype = "dashed", color = "blue") +
+  geom_line(aes(y = .pred_upper), data = regression_lines,
+            linetype = "dashed", color = "blue")
+```
+
+## ver si son atipicos, se peude agrupar con otras variables
+
+## cuando hacer ic las puntas son mas frandes porq tenes mas obs
+
+```{r}
+gen_additive_mod(
+  mode = "unknown",
+  select_features = NULL,
+  adjust_deg_free = NULL,
+  engine = "mgcv"
+)
+```
+## splines 
+```{r}
+glm_fit <-gen_additive_mod() %>%
+  set_engine("mgcv") %>%
+  set_mode("regression") %>%
+  fit(logSalary~ s(logCHits) + s(Errors)+ s(Assists), data = hits)
+
+summary(glm_fit$fit) 
+```
+

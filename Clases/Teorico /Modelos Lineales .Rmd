@@ -1,0 +1,70 @@
+---
+title: "Modelos Lineales"
+author: "Matias Bajac"
+date: '2024-09-24'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Regresion Lineal ##
+
+$$Y = f(X)\ +\ \epsilon$$
+
+- Componente deterministico (Y,f(X)): Describe comportamiento medio. 
+
+- Componente aleatorio $\epsilon$ : Describe desviaciones del comportamiento medio. 
+
+## Regresion lineal multiple ##
+
+- Cada $X_j$ es un predictor o variable independiente/explicativa. $Y_i$ es la respuesta o variable dependiente.
+
+-Los coeficientes/parametros $\beta_1,...,\beta_p$ 
+miden el efecto de cada predictor en la respuesta una vez considerado el efecto de todos los otros predictores en el modelo.
+
+- Los predictores pueden ser transformaciones de otras variables, el modelo sigue siendo lineal en los parametros (ej $x_2= x_{1}^2$) predictores categoricos deben ser convertidos a variables dummy
+
+- En base a datos observados de la respuesta y los predictores estimados los parametros del modelo, tendremos los parametros estimados $\hat{\beta_1},...,\hat{\beta_p}$, valores predichos, $\hat{Y}$ 6 residuos $\epsilon_i$.
+
+- Cuando tenemos una sola variable predictora en el modelo se llama regresion lineal simple.
+
+## Inferencia ##
+
+- Es al menos uno de los predictores util para predecir la respuesta?
+
+- Todos los predictores son utiles para explicar Y o solamente un subconjunto de ellos? 
+
+-Como ajusta los datos el modelo?
+
+- Dado un conjunto de observaciones de las predictoras, cual es el valor predicho de la respuesta? cuan precisa es la mism?
+
+## Algunas preguntas ##
+
+1) Existe una relacion lineal entre la inversion en publicidad y ventas?
+
+2) que tan fuerte es la relacion?
+
+etc etc
+
+
+## Ajuste del modelo ##
+
+
+$(x_1,y_1), (x_2,y_2)...(x_n,_n)$ representan n pasres de observaciones que usaremos para estimar tanto $\beta_0$  $\beta_1$.
+
+Obtenemos $\beta_0$ y $\beta_1$ de forma que la recta sea lo mas cercano a los datos. 
+
+notmos el modelo estmiado como 
+
+$$\hat{y} = \hat{\beta_0} +\hat{\beta_1}x_i$$
+donde $\hat{y}$ representa lo que espera el modelo de la respuesta cuando se observa $x_i$ 
+
+MCO (minimos cuadrados) es una forma comun de ajustar el modelo, donde $\hat{\beta_j}$ se selecciona tal que minimiza 
+
+
+
+
+
+
