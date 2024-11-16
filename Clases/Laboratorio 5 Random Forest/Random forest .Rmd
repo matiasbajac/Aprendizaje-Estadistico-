@@ -1,0 +1,418 @@
+---
+title: "Laboratorio 4"
+author: "Matias Bajac"
+date: '2024-11-11'
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidymodels)
+library(ISLR)
+
+library(rpart.plot)
+library(vip)
+
+data("Boston", package = "MASS")
+
+Boston <- as_tibble(Boston)
+```
+
+```{r}
+Carseats <- as_tibble(Carseats) %>%
+  mutate(High = factor(if_else(Sales <= 8, "No", "Yes"))) %>%
+  select(-Sales)
+```
+
+```{r}
+tree_spec <- decision_tree() %>%
+  set_engine("rpart")
+```
+
+Lo hace en 2 pasos para poder usarlo en regresion
+```{r}
+class_tree_spec <- tree_spec %>%
+  set_mode("classification")
+```
+
+Arbol de clasificacion 
+
+```{r}
+class_tree_fit <- class_tree_spec %>%
+  fit(High ~ ., data = Carseats)
+
+## ajustamos con fit con variable de respuesta high 
+
+
+```
+
+
+```{r}
+class_tree_fit
+
+## va mostrando las particiones
+
+
+```
+
+```{r}
+class_tree_fit %>%
+  extract_fit_engine() %>%
+  rpart.plot(roundint=FALSE)
+
+
+## el color representa si es si o no , la intensidad muestra que tan probable es que sea asi.
+## predecir una nueba obs
+```
+
+```{r}
+augment(class_tree_fit, new_data = Carseats) %>%
+  accuracy(truth = High, estimate = .pred_class)
+
+## no dividio en training test 
+
+## matriz de confusion 
+
+augment(class_tree_fit, new_data = Carseats) %>%
+  conf_mat(truth = High, estimate = .pred_class)
+
+
+set.seed(1234)
+Carseats_split <- initial_split(Carseats)
+
+Carseats_train <- training(Carseats_split)
+Carseats_test <- testing(Carseats_split)
+
+class_tree_fit <- fit(class_tree_spec, High ~ ., 
+                      data = Carseats_train)
+
+augment(class_tree_fit, new_data = Carseats_train) %>%
+  conf_mat(truth = High, estimate = .pred_class)
+
+
+
+```
+El error de precision con entrenamiento es optimista!!
+
+```{r}
+augment(class_tree_fit, new_data = Carseats_test) %>%
+  conf_mat(truth = High, estimate = .pred_class)
+```
+
+```{r}
+augment(class_tree_fit, new_data = Carseats_test) %>%
+  accuracy(truth = High, estimate = .pred_class)
+```
+Tuneamos el parametro costo complejidad 
+```{r}
+class_tree_wf <- workflow() %>%
+  add_model(class_tree_spec %>% 
+              set_args(cost_complexity = tune())) %>%
+  add_formula(High ~ .)
+```
+
+
+```{r}
+set.seed(1234)
+Carseats_fold <- vfold_cv(Carseats_train) #defecto 10-folds
+
+param_grid <- grid_regular(cost_complexity(range = c(0.001, 0.15), trans=NULL), 
+                           levels = 10)
+# me puedo armar una viz para ver cual es el rango 
+tune_res <- tune_grid(
+  class_tree_wf, 
+  resamples = Carseats_fold, ## como se partieron las cajas 
+  grid = param_grid, 
+  metrics = metric_set(accuracy)
+)
+```
+
+```{r}
+autoplot(tune_res)
+```
+
+El optimo esta en 0.74 de acurracy
+
+
+Hacemos la seleccion 
+
+```{r}
+best_complexity <- select_best(tune_res)
+
+class_tree_final <- finalize_workflow(class_tree_wf, best_complexity)
+
+class_tree_final_fit <- fit(class_tree_final, data = Carseats_train)
+
+class_tree_final_fit
+```
+
+```{r}
+class_tree_final_fit %>%
+  extract_fit_engine() %>% #extrae el objeto rpart
+  rpart.plot(roundint=FALSE)
+```
+
+  Que es esa variable? 
+  
+  Si es mayor a 8 o no 
+  
+  Si el asiento es malo vendes mas 
+  
+  el no seria alto 
+  
+```{r}
+reg_tree_spec <- tree_spec %>%
+  set_mode("regression")
+```
+  
+  
+```{r}
+set.seed(1234)
+Boston_split <- initial_split(Boston)
+
+Boston_train <- training(Boston_split)
+Boston_test <- testing(Boston_split)
+
+reg_tree_fit <- fit(reg_tree_spec, medv ~ ., Boston_train)
+reg_tree_fit
+```
+  
+```{r}
+augment(reg_tree_fit, new_data = Boston_test) %>%
+  rmse(truth = medv, estimate = .pred)
+```
+  
+  Problema para un arbol de regresion, la variable me da una solucion discreta, cuando la variable original es contiuna.
+  
+  
+```{r}
+reg_tree_wf <- workflow() %>%
+  add_model(reg_tree_spec %>% set_args(cost_complexity = tune())) %>%
+  add_formula(medv ~ .)
+
+set.seed(1234)
+Boston_fold <- vfold_cv(Boston_train)
+
+param_grid <- grid_regular(cost_complexity(range = c(0, 0.001), trans=NULL),
+                           levels = 20)
+
+tune_res <- tune_grid(
+  reg_tree_wf, 
+  resamples = Boston_fold, 
+  grid = param_grid
+)
+```
+  
+```{r}
+autoplot(tune_res)
+```
+  
+```{r}
+best_complexity = select_best(tune_res,metric= "rmse")
+
+reg_tree_final = finalize_workflow(reg_tree_wf, best_complexity)
+
+reg_tree_final_fit = fit(reg_tree_final,data=Boston_train)
+```
+  
+  
+```{r}
+reg_tree_final_fit %>%
+  extract_fit_engine() %>%
+  rpart.plot(roundint=FALSE,)
+```
+
+El corte terminal de los nodos es n =5. 
+
+
+Bagging
+
+solo hace muestra boostrap.
+
+usa todas las variables, no hace sorteo 
+con importance true me calcula va variable de importancia 
+
+Me rankea las variables segun la medida de importancia 
+
+```{r}
+
+bagging_spec <- rand_forest(mtry = .cols()) %>%
+  set_engine("randomForest", importance = TRUE) %>%
+  set_mode("classification")
+
+bagging_fit <- fit(bagging_spec, High ~ ., data = Carseats_train)
+
+
+```
+
+```{r}
+augment(bagging_fit, new_data = Carseats_test) %>%
+  accuracy(truth = High, estimate = .pred_class)
+```
+
+```{r}
+augment(bagging_fit, new_data = Carseats_test) %>%
+  accuracy(truth = High, estimate = .pred_class)
+```
+
+```{r}
+vip(bagging_fit)
+```
+
+```{r}
+## tuneamos mtry , usa 6 variables para la particion de nodos.
+
+rf_spec <- rand_forest(mtry = 6) %>%
+  set_engine("randomForest", importance = TRUE) %>%
+  set_mode("classification")
+rf_fit <- fit(rf_spec, High ~ ., data = Carseats_train)
+rf_fit 
+```
+
+Es el error que no queda en la muestra bootstrap 
+
+La diagional no principal en la matriz de confusion es la que predigo mal 
+
+Ahora lo hace con el test q es el que esta bien 
+
+```{r}
+rf_test_pred <- 
+  predict(rf_fit, Carseats_test) %>% 
+  bind_cols(predict(rf_fit, Carseats_test, type = "prob")) %>% 
+  # Agragamos los verdaderos datosd
+  bind_cols(Carseats_test %>% 
+              select(High))
+ 
+rf_test_pred %>%               
+  roc_auc(truth = High, .pred_No)
+
+autoplot(roc_curve(rf_test_pred, truth = High, .pred_No))
+
+augment(rf_fit, new_data = Carseats_test) %>%
+  accuracy(truth = High, estimate = .pred_class)
+
+```
+Da las mismas variables importantes que en el arbol y el error no cambia mucho.
+
+```{r}
+vip(rf_fit)
+```
+
+1) Con los datos de Carseats, ajusta un bosque de clasificacion a ranger con 10000 arboles 
+.cols es para baging 
+
+```{r}
+
+
+rf_ranger = recipe(High ~ ., data = Carseats_train)
+
+random_spec <- rand_forest(mtry = tune(), min_n = tune(),trees=1000) %>%
+  set_engine("ranger") %>%  set_mode("classification")
+
+tune_wf = workflow() %>%  add_recipe(rf_ranger) %>%  add_model(random_spec)
+
+set.seed(321)
+
+trees_folds = vfold_cv(Carseats_train) ## cross validar por defecto 75 train 
+tune_res= tune_grid(tune_wf,resamples = trees_folds, grid =20,metric = metric_set(roc_auc))
+
+
+
+
+
+
+```
+
+
+2) Mediante Cross Validation **tunea** los hiperparametros **mtry** y min_n
+
+
+
+
+```{r}
+rf_grid = grid_regular(
+  mtry(range = c(2,7))
+)
+```
+
+
+
+definimos el workflow 
+```{r}
+
+class_random_wf <- workflow() %>%
+  add_model(class_tree_spec %>% 
+              set_args(cost_complexity = tune())) %>%
+  add_formula(High ~ .)
+
+```
+
+Hace una visualizacion para ver los resultados usando la metrica **roc_auc**
+
+```{r}
+tune_res %>%   collect_metrics()  %>%  filter(.metric == "roc_auc")  %>%  select(mean,min_n,mtry)  %>%  pivot_longer(min_n:mtry,values_to = "value",names_to = "parameter")  %>%   
+ggplot(aes(value,mean,color=parameter)) + geom_point(show.legend=FALSE) + facet_wrap(~parameter,scales = "free_x") 
+
+autoplot(tune_res)
+
+## el segundo es la cantidad de particiones que va a usar como minimo 
+
+## selecciona el mejor modelo y hacer el ajuste final
+```
+
+```{r}
+
+rf_grid = grid_regular(mtry(range =c(2,7)), 
+   min_n(range = c(2,10)),
+   levels =5)
+
+set.seed(456)
+
+regular_res = tune_grid(tune_wf,
+                        resamples = trees_folds,
+                        grid=rf_grid)
+
+regular_res
+
+regular_res %>%  collect_metrics() %>% 
+  filter(.metric=="roc_auc") %>%  
+  mutate(min_n = factor(min_n)) %>%  
+  ggplot(aes(mtry,mean,color = min_n)) +
+  geom_line(alpha=.5,size=1.5) +
+  geom_point() + 
+  labs(y = "AUC")
+```
+
+6) Selecciona el mejor modelo con**select_best** y ajusta el modelo final
+
+
+```{r}
+best_auc = select_best(regular_res, metric = "roc_auc")
+
+final_rf = finalize_model(
+  tune_spec,
+  best_auc
+)
+final_rf
+```
+
+```{r}
+final_wf <- workflow() %>%
+  add_recipe(rf_ranger) %>%
+  add_model(final_rf)
+
+final_res <- final_wf %>%
+  last_fit(Carseats_split)
+
+final_res %>%
+  collect_metrics()
+```
+
+ 
+ 
+ 
+ 
+
