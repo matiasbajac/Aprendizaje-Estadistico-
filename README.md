@@ -1,2 +1,4 @@
-Curso Aprendizaje Estadistico supervisado 2024 - Iesta Udelar
-Por Prof Natalia Da Silva 
+Materiales del curso de Modelos Lineales
+Profe Natalia Da Silva
+IESTA -  UDELAR
+Edición 2024
